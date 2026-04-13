@@ -15,10 +15,16 @@ st.markdown("""
     header {visibility: hidden;}
     .main { background-color: #ffffff; }
     
-    /* Estilo para que la imagen sea muy grande y clara */
-    .stImage > img {
-        border: 1px solid #ddd;
-        border-radius: 5px;
+    /* Botón de búsqueda principal en verde */
+    div.stButton > button:first-child {
+        background-color: #2e7d32;
+        color: white;
+        height: 3em;
+        width: 100%;
+        border-radius: 10px;
+        font-weight: bold;
+        font-size: 18px;
+        border: none;
     }
     
     .stTextInput>div>div>input { 
@@ -49,11 +55,10 @@ def buscar_perfeccionado(pdf_path, query):
             for inst in instancias:
                 pagina.add_highlight_annot(inst)
             
-            # Renderizado a ALTA resolución (4x) para que no se pixele
+            # Alta resolución 4x para compensar la falta de zoom táctil
             pix = pagina.get_pixmap(matrix=fitz.Matrix(4, 4)) 
             img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             
-            # Preparar imagen para descarga/zoom
             img_byte_arr = io.BytesIO()
             img.save(img_byte_arr, format='PNG')
             img_byte_arr = img_byte_arr.getvalue()
@@ -73,31 +78,41 @@ def buscar_perfeccionado(pdf_path, query):
 st.title("📅 Consultar turno Villalba")
 st.write("Ingresa siglas del turno para localizarlo")
 
-if os.path.exists(NOMBRE_PDF):
-    query = st.text_input("", placeholder="Ejemplo: MJP5")
+# Creamos el campo de texto
+query = st.text_input("", placeholder="Ejemplo: MJP5")
 
-    if query:
-        with st.spinner('Buscando...'):
-            res = buscar_perfeccionado(NOMBRE_PDF, query)
-            
-            if res:
-                st.success(f"Resultados para: {query}")
-                for i, item in enumerate(res):
-                    with st.container():
-                        st.subheader(f"Página {item['pagina']}")
-                        
-                        # Botón para abrir la imagen en grande (esto ayuda en móviles)
-                        st.download_button(
-                            label="🔍 Ver imagen en tamaño completo (Zoom)",
-                            data=item['bytes'],
-                            file_name=f"turno_pagina_{item['pagina']}.png",
-                            mime="image/png",
-                            key=f"btn_{i}"
-                        )
-                        
-                        st.image(item['imagen'], use_container_width=True)
-                        st.divider()
-            else:
-                st.warning(f"No se encontró ninguna referencia a '{query}'.")
-else:
-    st.error("Error: Sube el archivo 'base_datos.pdf' a GitHub.")
+# AÑADIMOS EL BOTÓN DE BUSCAR
+btn_buscar = st.button("BUSCAR TURNO")
+
+# Solo si se pulsa el botón o se da a Enter en el teclado
+if btn_buscar and query:
+    with st.spinner('Buscando en el sistema...'):
+        res = buscar_perfeccionado(NOMBRE_PDF, query)
+        
+        if res:
+            st.success(f"Resultados para: {query}")
+            for i, item in enumerate(res):
+                with st.container():
+                    st.subheader(f"Página {item['pagina']}")
+                    
+                    # Opción para ver en grande si el zoom falla
+                    st.download_button(
+                        label="🔍 Ver imagen en tamaño completo",
+                        data=item['bytes'],
+                        file_name=f"turno_{query}_pag_{item['pagina']}.png",
+                        mime="image/png",
+                        key=f"btn_{i}"
+                    )
+                    
+                    st.image(item['imagen'], use_container_width=True)
+                    st.divider()
+        else:
+            st.warning(f"No se encontró ninguna coincidencia para '{query}'.")
+elif btn_buscar and not query:
+    st.error("Por favor, escribe las siglas antes de buscar.")
+
+if not os.path.exists(NOMBRE_PDF):
+    st.error("Archivo 'base_datos.pdf' no detectado en GitHub.")
+
+st.divider()
+st.caption("Sistema de búsqueda - Villalba")
