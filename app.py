@@ -31,7 +31,6 @@ st.markdown(hide_menu_style, unsafe_allow_html=True)
 
 # --- 3. TUS FUNCIONES (buscar_y_resaltar, etc.) ---
 def buscar_y_resaltar(file_bytes, query):
-    # ... aquí sigue el resto del código que ya tenías ...import streamlit as st
 import fitz  # PyMuPDF
 from PIL import Image
 
