@@ -1,6 +1,39 @@
 import streamlit as st
 import fitz  # PyMuPDF
 from PIL import Image
+import urllib.parse
+
+# --- 1. CONFIGURACIÓN DE LA PÁGINA (ESTO VA PRIMERO) ---
+st.set_page_config(
+    page_title="BuscaServicios v1.0",
+    page_icon="🔍",
+    layout="centered"
+)
+
+# --- 2. ESTILOS PARA QUE PAREZCA UNA APP MÓVIL ---
+hide_menu_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .main {
+        background-color: #f5f7f9;
+    }
+    .stButton>button {
+        width: 100%;
+        border-radius: 20px;
+        background-color: #25D366;
+        color: white;
+    }
+    </style>
+    """
+st.markdown(hide_menu_style, unsafe_allow_html=True)
+
+# --- 3. TUS FUNCIONES (buscar_y_resaltar, etc.) ---
+def buscar_y_resaltar(file_bytes, query):
+    # ... aquí sigue el resto del código que ya tenías ...import streamlit as st
+import fitz  # PyMuPDF
+from PIL import Image
 
 def buscar_y_resaltar(file_bytes, query):
     doc = fitz.open(stream=file_bytes, filetype="pdf")
