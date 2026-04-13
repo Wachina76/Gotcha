@@ -2,6 +2,7 @@ import streamlit as st
 import fitz  # PyMuPDF
 from PIL import Image
 import os
+import re
 
 # 1. CONFIGURACIÓN VISUAL
 st.set_page_config(page_title="Turnos Villalba", page_icon="📅", layout="centered")
@@ -14,66 +15,75 @@ st.markdown("""
     .main { background-color: #ffffff; }
     .stTextInput>div>div>input { 
         border-radius: 10px; 
-        border: 2px solid #e0e0e0;
+        border: 2px solid #2e7d32;
     }
     .streamlit-expanderHeader {
-        background-color: #f8f9fa;
+        background-color: #e8f5e9;
         border-radius: 10px;
         font-weight: bold;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. NOMBRE DEL ARCHIVO EN GITHUB
+# 2. RUTA DEL ARCHIVO
 NOMBRE_PDF = "base_datos.pdf" 
 
-def buscar_en_catalogo(pdf_path, query):
+def buscar_perfeccionado(pdf_path, query):
     if not os.path.exists(pdf_path):
         return None
     
     doc = fitz.open(pdf_path)
     resultados = []
-    query = query.lower().strip()
+    query_clean = query.lower().strip()
 
     for num_pagina in range(len(doc)):
         pagina = doc[num_pagina]
         texto_pagina = pagina.get_text().lower()
         
-        if query in texto_pagina:
-            instancias = pagina.search_for(query)
+        # Verificamos si la sigla existe en la página
+        if query_clean in texto_pagina:
+            # Buscamos las coordenadas para resaltar
+            instancias = pagina.search_for(query_clean)
             for inst in instancias:
                 pagina.add_highlight_annot(inst)
             
+            # Puntuación de relevancia:
+            # Si la sigla está sola o rodeada de espacios, le damos prioridad
+            prioridad = 1 if re.search(rf'\b{re.escape(query_clean)}\b', texto_pagina) else 2
+            
             pix = pagina.get_pixmap(matrix=fitz.Matrix(2, 2))
             img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            resultados.append({"pagina": num_pagina + 1, "imagen": img})
             
-    return resultados
+            resultados.append({
+                "pagina": num_pagina + 1,
+                "imagen": img,
+                "prioridad": prioridad
+            })
+    
+    # Ordenamos: primero los que tienen prioridad 1 (coincidencia más exacta)
+    return sorted(resultados, key=lambda x: x['prioridad'])
 
-# 3. INTERFAZ DE USUARIO ACTUALIZADA
+# 3. INTERFAZ DE USUARIO
 st.title("📅 Consultar turno Villalba")
-# TEXTO ACTUALIZADO AQUÍ ABAJO:
 st.write("Ingresa siglas del turno para localizarlo en el sistema")
 
 if os.path.exists(NOMBRE_PDF):
-    # Campo de búsqueda
-    query = st.text_input("", placeholder="🔍 Escribe las siglas aquí...")
+    query = st.text_input("", placeholder="🔍 Ejemplo: MJP5")
 
     if query:
-        with st.spinner('Buscando turno...'):
-            res = buscar_en_catalogo(NOMBRE_PDF, query)
+        with st.spinner('Localizando turno exacto...'):
+            res = buscar_perfeccionado(NOMBRE_PDF, query)
             
             if res:
-                st.info(f"Se han encontrado {len(res)} coincidencia(s).")
+                st.success(f"He encontrado {len(res)} resultado(s) para: {query}")
                 for item in res:
-                    with st.expander(f"📄 Información del Turno - Página {item['pagina']}", expanded=True):
+                    etiqueta = "✅ Coincidencia Principal" if item['prioridad'] == 1 else "📄 Mención en página"
+                    with st.expander(f"{etiqueta} - Página {item['pagina']}", expanded=True):
                         st.image(item['imagen'], use_container_width=True)
             else:
-                st.warning("No se encontraron coincidencias. Asegúrate de que las siglas sean correctas.")
+                st.warning(f"No se encontró ninguna referencia a '{query}'.")
 else:
-    st.error("Archivo 'base_datos.pdf' no encontrado. Asegúrate de subir la lista de turnos a GitHub.")
+    st.error("Error: Sube el archivo 'base_datos.pdf' a GitHub para que el sistema funcione.")
 
 st.divider()
-st.caption("Sistema de consulta de turnos - Villalba")
- 
- 
+st.caption("Sistema optimizado de búsqueda de turnos - Villalba")
