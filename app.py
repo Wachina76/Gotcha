@@ -50,19 +50,26 @@ st.markdown(f"""
         border-left: 5px solid #2196f3;
     }}
     div.stButton > button {{
-        background-color: #2e7d32 !important;
+        background-color: #d32f2f !important; /* Rojo para el botón de buscar también */
         color: white !important;
         height: 3.5em;
         width: 100%;
         border-radius: 10px;
         font-weight: bold;
+        font-size: 18px;
         border: none;
+        cursor: pointer;
+    }}
+    .stTextInput>div>div>input {{ 
+        border-radius: 10px; 
+        border: 2px solid #d32f2f;
+        font-size: 18px !important;
     }}
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNCIÓN DE BÚSQUEDA CON DETECCIÓN DE TIPO ---
-def buscar_y_clasificar(pdf_path, query):
+# --- FUNCIÓN DE BÚSQUEDA CON RESALTADO EN ROJO ---
+def buscar_y_clasificar_rojo(pdf_path, query):
     if not os.path.exists(pdf_path): return None
     
     doc = fitz.open(pdf_path)
@@ -73,8 +80,9 @@ def buscar_y_clasificar(pdf_path, query):
         pagina = doc[num_pagina]
         texto_pagina = pagina.get_text().lower()
         
+        # Búsqueda normalizada
         if query_clean in " ".join(texto_pagina.split()):
-            # LÓGICA DE DETECCIÓN DE "DISCO"
+            # Lógica de clasificación
             tipo_ubicacion = "Ubicación general"
             if "sin disco" in texto_pagina:
                 tipo_ubicacion = "📍 Ubicado en: SIN DISCO"
@@ -83,15 +91,22 @@ def buscar_y_clasificar(pdf_path, query):
             elif "refuerzo" in texto_pagina:
                 tipo_ubicacion = "📍 Tipo: TURNO DE REFUERZO"
 
-            # Resaltado
+            # --- NUEVA LÓGICA DE RESALTADO EN ROJO ---
             instancias = pagina.search_for(query)
             for inst in instancias:
-                pagina.add_highlight_annot(inst)
+                # Añadimos la anotación de resaltado
+                annot = pagina.add_highlight_annot(inst)
+                # Cambiamos el color a ROJO (RGB: 1, 0, 0)
+                annot.set_colors(stroke=(1, 0, 0)) 
+                # Aumentamos la opacidad para que sea más visible
+                annot.set_opacity(0.8)
+                annot.update() # Guardamos los cambios en la anotación
             
-            # Imagen alta calidad
-            pix = pagina.get_pixmap(matrix=fitz.Matrix(3.5, 3.5)) 
+            # Renderizado en ALTA CALIDAD (4x) para que se vea nítido al hacer zoom
+            pix = pagina.get_pixmap(matrix=fitz.Matrix(4, 4)) 
             img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             
+            # Preparar bytes para el botón de descarga/zoom
             img_byte_arr = io.BytesIO()
             img.save(img_byte_arr, format='PNG')
             
@@ -104,39 +119,47 @@ def buscar_y_clasificar(pdf_path, query):
     doc.close()
     return resultados
 
-# --- INTERFAZ ---
+# --- INTERFAZ PRINCIPAL ---
 st.markdown(f'<div class="vistas-box">📊 Visualizaciones totales: {total_vistas}</div>', unsafe_allow_html=True)
+
 st.title("📅 Consultar turno Villalba")
 
-st.info('**Nota:** Los refuerzos se buscan tal cual el tráfico. Ejemplo: `Ref mañana 2`')
+# Aviso importante
+st.info('**Nota:** Los turnos de refuerzo se buscan tal cual están en el tráfico. Ejemplo: `Ref mañana 2` o `Ref tarde 3`. El turno aparecerá marcado en **ROJO**.')
 
-query = st.text_input("Ingresa siglas o nombre del turno:", placeholder="Ejemplo: MJP5")
+# Input de búsqueda
+query = st.text_input("Ingresa siglas o nombre del turno:", placeholder="Ejemplo: Ref mañana 2")
+
+# Botón Buscar
 btn_buscar = st.button("BUSCAR TURNO")
 
 if btn_buscar and query:
-    archivo_pdf = "base_datos.pdf" 
+    archivo_pdf = "base_datos.pdf" # Nombre exacto de tu archivo en GitHub
     if os.path.exists(archivo_pdf):
-        with st.spinner('Analizando archivos...'):
-            resultados = buscar_y_clasificar(archivo_pdf, query)
+        with st.spinner('Localizando turno en rojo...'):
+            resultados = buscar_y_clasificar_rojo(archivo_pdf, query)
+            
             if resultados:
-                st.success(f"Encontrado para '{query}':")
+                st.success(f"Se han encontrado {len(resultados)} coincidencia(s) para '{query}'")
                 for i, item in enumerate(resultados):
-                    # MOSTRAR LA CLASIFICACIÓN (Sin disco / Con disco)
+                    # Clasificación (Sin disco/Con disco)
                     st.markdown(f'<div class="etiqueta-info">{item["clasificacion"]}</div>', unsafe_allow_html=True)
                     
+                    st.subheader(f"Página {item['pagina']}")
+                    # Botón para descargar/ver en grande (HD)
                     st.download_button(
-                        label=f"🔍 Abrir Página {item['pagina']} en HD",
+                        label=f"🔍 Abrir Página {item['pagina']} en Alta Calidad",
                         data=item['bytes'],
-                        file_name=f"turno_pag_{item['pagina']}.png",
+                        file_name=f"turno_{query}_pag_{item['pagina']}.png",
                         mime="image/png",
                         key=f"dl_{i}"
                     )
                     st.image(item['imagen'], use_container_width=True)
                     st.divider()
             else:
-                st.warning("No se encontró el turno. Revisa las siglas.")
+                st.warning(f"No se encontró ninguna coincidencia para '{query}'. Revisa si está bien escrito.")
     else:
-        st.error("Sube 'base_datos.pdf' a GitHub.")
+        st.error(f"Error: No se encuentra el archivo '{archivo_pdf}' en GitHub.")
 
+st.divider()
 st.caption("Sistema de consulta inteligente - Villalba")
-
