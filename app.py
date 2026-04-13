@@ -20,8 +20,7 @@ def actualizar_contador():
         vistas += 1
         with open(CONTADOR_FILE, "w") as f: f.write(str(vistas))
         return vistas
-    except:
-        return 0
+    except: return 0
 
 total_vistas = actualizar_contador()
 
@@ -41,7 +40,15 @@ st.markdown(f"""
         margin-bottom: 20px;
         border: 1px solid #c8e6c9;
     }}
-    /* Estilo del Botón Buscar */
+    .etiqueta-info {{
+        background-color: #e3f2fd;
+        color: #0d47a1;
+        padding: 8px 15px;
+        border-radius: 8px;
+        font-weight: bold;
+        margin-bottom: 10px;
+        border-left: 5px solid #2196f3;
+    }}
     div.stButton > button {{
         background-color: #2e7d32 !important;
         color: white !important;
@@ -49,95 +56,87 @@ st.markdown(f"""
         width: 100%;
         border-radius: 10px;
         font-weight: bold;
-        font-size: 18px;
         border: none;
-        cursor: pointer;
     }}
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNCIÓN DE BÚSQUEDA ---
-def buscar_en_pdf(pdf_path, query):
-    if not os.path.exists(pdf_path):
-        return None
+# --- FUNCIÓN DE BÚSQUEDA CON DETECCIÓN DE TIPO ---
+def buscar_y_clasificar(pdf_path, query):
+    if not os.path.exists(pdf_path): return None
     
     doc = fitz.open(pdf_path)
     resultados = []
-    # Normalizamos la búsqueda: quitamos espacios extra y pasamos a minúsculas
     query_clean = " ".join(query.lower().split())
 
     for num_pagina in range(len(doc)):
         pagina = doc[num_pagina]
-        # Extraemos texto normalizado de la página
-        texto_pagina = " ".join(pagina.get_text().lower().split())
+        texto_pagina = pagina.get_text().lower()
         
-        if query_clean in texto_pagina:
-            # Resaltar en el PDF original
+        if query_clean in " ".join(texto_pagina.split()):
+            # LÓGICA DE DETECCIÓN DE "DISCO"
+            tipo_ubicacion = "Ubicación general"
+            if "sin disco" in texto_pagina:
+                tipo_ubicacion = "📍 Ubicado en: SIN DISCO"
+            elif "con disco" in texto_pagina:
+                tipo_ubicacion = "📍 Ubicado en: CON DISCO"
+            elif "refuerzo" in texto_pagina:
+                tipo_ubicacion = "📍 Tipo: TURNO DE REFUERZO"
+
+            # Resaltado
             instancias = pagina.search_for(query)
             for inst in instancias:
                 pagina.add_highlight_annot(inst)
             
-            # Renderizar imagen en alta calidad
+            # Imagen alta calidad
             pix = pagina.get_pixmap(matrix=fitz.Matrix(3.5, 3.5)) 
             img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             
-            # Preparar bytes para descarga
             img_byte_arr = io.BytesIO()
             img.save(img_byte_arr, format='PNG')
             
             resultados.append({
                 "pagina": num_pagina + 1,
                 "imagen": img,
-                "bytes": img_byte_arr.getvalue()
+                "bytes": img_byte_arr.getvalue(),
+                "clasificacion": tipo_ubicacion
             })
     doc.close()
     return resultados
 
-# --- INTERFAZ PRINCIPAL ---
+# --- INTERFAZ ---
 st.markdown(f'<div class="vistas-box">📊 Visualizaciones totales: {total_vistas}</div>', unsafe_allow_html=True)
-
 st.title("📅 Consultar turno Villalba")
 
-# Aviso importante
-st.info('**Nota importante:** Los turnos de refuerzo se buscan tal cual están en el tráfico. Ejemplo: `Ref mañana 2` o `Ref tarde 3`.')
+st.info('**Nota:** Los refuerzos se buscan tal cual el tráfico. Ejemplo: `Ref mañana 2`')
 
-# Input de búsqueda
-query = st.text_input("Ingresa siglas o nombre del turno:", placeholder="Ejemplo: Ref mañana 2")
+query = st.text_input("Ingresa siglas o nombre del turno:", placeholder="Ejemplo: MJP5")
+btn_buscar = st.button("BUSCAR TURNO")
 
-# El botón ahora está vinculado a una variable
-boton_pulsado = st.button("BUSCAR TURNO")
-
-# Solo se ejecuta si se pulsa el botón
-if boton_pulsado:
-    if query:
-        # Reemplaza 'base_datos.pdf' por el nombre exacto de tu archivo en GitHub
-        archivo_pdf = "base_datos.pdf" 
-        
-        if os.path.exists(archivo_pdf):
-            with st.spinner('Buscando en el sistema...'):
-                resultados = buscar_en_pdf(archivo_pdf, query)
-                
-                if resultados:
-                    st.success(f"Se han encontrado {len(resultados)} coincidencia(s) para '{query}'")
-                    for i, item in enumerate(resultados):
-                        st.subheader(f"Página {item['pagina']}")
-                        # Botón para descargar/ver en grande
-                        st.download_button(
-                            label="🔍 Ver imagen en tamaño completo (Zoom)",
-                            data=item['bytes'],
-                            file_name=f"turno_pag_{item['pagina']}.png",
-                            mime="image/png",
-                            key=f"dl_{i}"
-                        )
-                        st.image(item['imagen'], use_container_width=True)
-                        st.divider()
-                else:
-                    st.warning(f"No se encontró nada para '{query}'. Revisa si está bien escrito.")
-        else:
-            st.error(f"Error: No se encuentra el archivo '{archivo_pdf}' en GitHub.")
+if btn_buscar and query:
+    archivo_pdf = "base_datos.pdf" 
+    if os.path.exists(archivo_pdf):
+        with st.spinner('Analizando archivos...'):
+            resultados = buscar_y_clasificar(archivo_pdf, query)
+            if resultados:
+                st.success(f"Encontrado para '{query}':")
+                for i, item in enumerate(resultados):
+                    # MOSTRAR LA CLASIFICACIÓN (Sin disco / Con disco)
+                    st.markdown(f'<div class="etiqueta-info">{item["clasificacion"]}</div>', unsafe_allow_html=True)
+                    
+                    st.download_button(
+                        label=f"🔍 Abrir Página {item['pagina']} en HD",
+                        data=item['bytes'],
+                        file_name=f"turno_pag_{item['pagina']}.png",
+                        mime="image/png",
+                        key=f"dl_{i}"
+                    )
+                    st.image(item['imagen'], use_container_width=True)
+                    st.divider()
+            else:
+                st.warning("No se encontró el turno. Revisa las siglas.")
     else:
-        st.error("Escribe algo en el buscador antes de pulsar el botón.")
+        st.error("Sube 'base_datos.pdf' a GitHub.")
 
-st.divider()
-st.caption("Sistema de consulta - Villalba")
+st.caption("Sistema de consulta inteligente - Villalba")
 
