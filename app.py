@@ -52,11 +52,12 @@ def buscar_en_catalogo(pdf_path, query):
 
 # 3. INTERFAZ DE USUARIO ACTUALIZADA
 st.title("📅 Consultar turno Villalba")
-st.write("Ingresa tu nombre, DNI o fecha para localizar tu turno en el sistema.")
+# TEXTO ACTUALIZADO AQUÍ ABAJO:
+st.write("Ingresa siglas del turno para localizarlo en el sistema")
 
 if os.path.exists(NOMBRE_PDF):
     # Campo de búsqueda
-    query = st.text_input("", placeholder="🔍 Escribe aquí para buscar tu turno...")
+    query = st.text_input("", placeholder="🔍 Escribe las siglas aquí...")
 
     if query:
         with st.spinner('Buscando turno...'):
@@ -68,10 +69,11 @@ if os.path.exists(NOMBRE_PDF):
                     with st.expander(f"📄 Información del Turno - Página {item['pagina']}", expanded=True):
                         st.image(item['imagen'], use_container_width=True)
             else:
-                st.warning("No se encontraron turnos con ese dato. Revisa si está bien escrito.")
+                st.warning("No se encontraron coincidencias. Asegúrate de que las siglas sean correctas.")
 else:
-    st.error("Archivo 'base_datos.pdf' no encontrado. Asegúrate de subir la lista de turnos a GitHub con ese nombre.")
+    st.error("Archivo 'base_datos.pdf' no encontrado. Asegúrate de subir la lista de turnos a GitHub.")
 
 st.divider()
 st.caption("Sistema de consulta de turnos - Villalba")
+ 
  
